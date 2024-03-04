@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:match*",
-      "destination": "https://mapi.liuguowai.cf/:match*"
+      "destination": "https://musicapi.185335.xyz/:match*"
     }
   ]
 }
