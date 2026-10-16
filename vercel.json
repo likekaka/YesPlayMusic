@@ -3,6 +3,10 @@
     {
       "source": "/api/:match*",
       "destination": "https://musicapi.185335.xyz/:match*"
+    },
+    {
+      "source": "/unm/:match*",
+      "destination": "https://music-api.gdstudio.xyz/:match*"
     }
   ]
 }
