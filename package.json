@@ -63,7 +63,8 @@
     "webpack": "^5.90.0"
   },
   "resolutions": {
-    "degenerator": "2.2.0"
+    "core-js": "3.50.0",
+    "core-js-compat": "3.50.0"
   },
   "eslintConfig": {
     "root": true,
