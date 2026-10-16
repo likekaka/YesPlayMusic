@@ -4,6 +4,7 @@ import { trackScrobble, trackUpdateNowPlaying } from '@/api/lastfm';
 import { fmTrash, personalFM } from '@/api/others';
 import { getPlaylistDetail, intelligencePlaylist } from '@/api/playlist';
 import { getLyric, getMP3, getTrackDetail, scrobble } from '@/api/track';
+import { getUnmUrl } from '@/api/unm';
 import store from '@/store';
 import { isAccountLoggedIn } from '@/utils/auth';
 import { cacheTrackSource, getTrackSource } from '@/utils/db';
@@ -111,7 +112,7 @@ export default class {
   }
   set repeatMode(mode) {
     if (this._isPersonalFM) return;
-    if (!['off', 'on', 'one'].includes(mode)) {
+    if (!['on', 'off', 'one'].includes(mode)) {
       console.warn("repeatMode: invalid args, must be 'on' | 'off' | 'one'");
       return;
     }
@@ -426,10 +427,20 @@ export default class {
   async _getAudioSourceFromUnblockMusic(track) {
     console.debug(`[debug][Player.js] _getAudioSourceFromUnblockMusic`);
 
-    if (
-      process.env.IS_ELECTRON !== true ||
-      store.state.settings.enableUnblockNeteaseMusic === false
-    ) {
+    if (store.state.settings.enableUnblockNeteaseMusic === false) {
+      return null;
+    }
+
+    // 网页端：GD Studio 多音源解析（https://music.gdstudio.xyz）
+    // 拿网易歌曲 id 换取其他平台可用播放链接，br>0 表示换源成功
+    if (process.env.IS_ELECTRON !== true) {
+      const result = await getUnmUrl(
+        track.id,
+        store.state.settings.unmEnableFlac ? '999' : '320'
+      ).catch(() => null);
+      if (result && result.br > 0 && result.url) {
+        return result.url;
+      }
       return null;
     }
 
