@@ -3,13 +3,42 @@ import path from 'path';
 import { app, nativeImage, Tray, Menu, nativeTheme } from 'electron';
 import { isLinux } from '@/utils/platform';
 
-function createMenuTemplate(win) {
+function getTrayIconTheme(store) {
+  const trayIconTheme = store.get('settings.trayIconTheme');
+  if (trayIconTheme === 'light' || trayIconTheme === 'dark') {
+    return trayIconTheme;
+  }
+
+  return nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+}
+
+function createMenuIcon(filename, iconTheme) {
+  const image = nativeImage.createFromPath(
+    path.join(__static, `img/icons/${filename}.png`)
+  );
+
+  if (iconTheme === 'dark') return image;
+
+  const bitmap = image.toBitmap();
+  for (let offset = 0; offset < bitmap.length; offset += 4) {
+    // NativeImage bitmaps use premultiplied alpha, so white RGB values
+    // must match the pixel's alpha value to preserve antialiased edges.
+    const alpha = bitmap[offset + 3];
+    bitmap[offset] = alpha;
+    bitmap[offset + 1] = alpha;
+    bitmap[offset + 2] = alpha;
+  }
+
+  return nativeImage.createFromBitmap(bitmap, image.getSize());
+}
+
+function createMenuTemplate(win, store) {
+  const iconTheme = getTrayIconTheme(store);
+
   return [
     {
       label: '播放',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/play.png')
-      ),
+      icon: createMenuIcon('play', iconTheme),
       click: () => {
         win.webContents.send('play');
       },
@@ -17,9 +46,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '暂停',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/pause.png')
-      ),
+      icon: createMenuIcon('pause', iconTheme),
       click: () => {
         win.webContents.send('play');
       },
@@ -28,9 +55,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '上一首',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/left.png')
-      ),
+      icon: createMenuIcon('left', iconTheme),
       accelerator: 'CmdOrCtrl+Left',
       click: () => {
         win.webContents.send('previous');
@@ -38,9 +63,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '下一首',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/right.png')
-      ),
+      icon: createMenuIcon('right', iconTheme),
       accelerator: 'CmdOrCtrl+Right',
       click: () => {
         win.webContents.send('next');
@@ -48,9 +71,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '循环播放',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/repeat.png')
-      ),
+      icon: createMenuIcon('repeat', iconTheme),
       accelerator: 'Alt+R',
       click: () => {
         win.webContents.send('repeat');
@@ -58,9 +79,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '加入喜欢',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/like.png')
-      ),
+      icon: createMenuIcon('like', iconTheme),
       accelerator: 'CmdOrCtrl+L',
       click: () => {
         win.webContents.send('like');
@@ -69,9 +88,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '取消喜欢',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/unlike.png')
-      ),
+      icon: createMenuIcon('unlike', iconTheme),
       accelerator: 'CmdOrCtrl+L',
       click: () => {
         win.webContents.send('like');
@@ -81,9 +98,7 @@ function createMenuTemplate(win) {
     },
     {
       label: '退出',
-      icon: nativeImage.createFromPath(
-        path.join(__static, 'img/icons/exit.png')
-      ),
+      icon: createMenuIcon('exit', iconTheme),
       accelerator: 'CmdOrCtrl+W',
       click: () => {
         app.exit();
@@ -102,10 +117,11 @@ function createMenuTemplate(win) {
 // 添加左键支持
 // 2022.05.17
 class YPMTrayLinuxImpl {
-  constructor(tray, win, emitter) {
+  constructor(tray, win, emitter, store) {
     this.tray = tray;
     this.win = win;
     this.emitter = emitter;
+    this.store = store;
     this.template = undefined;
     this.initTemplate();
     this.contextMenu = Menu.buildFromTemplate(this.template);
@@ -127,7 +143,7 @@ class YPMTrayLinuxImpl {
       {
         type: 'separator',
       },
-    ].concat(createMenuTemplate(this.win));
+    ].concat(createMenuTemplate(this.win, this.store));
   }
 
   handleEvents() {
@@ -146,15 +162,38 @@ class YPMTrayLinuxImpl {
       this.contextMenu.getMenuItemById('unlike').visible = isLiked;
       this.tray.setContextMenu(this.contextMenu);
     });
+    this.emitter.on('updateIcon', () => {
+      this.updateIcon();
+    });
+  }
+
+  updateIcon() {
+    let trayIconSetting = this.store.get('settings.trayIconTheme') || 'auto';
+    let iconTheme;
+    if (trayIconSetting === 'auto') {
+      iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+    } else {
+      iconTheme = trayIconSetting;
+    }
+
+    let icon = nativeImage
+      .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
+      .resize({
+        height: 20,
+        width: 20,
+      });
+
+    this.tray.setImage(icon);
   }
 }
 
 class YPMTrayWindowsImpl {
-  constructor(tray, win, emitter) {
+  constructor(tray, win, emitter, store) {
     this.tray = tray;
     this.win = win;
     this.emitter = emitter;
-    this.template = createMenuTemplate(win);
+    this.store = store;
+    this.template = createMenuTemplate(win, store);
     this.contextMenu = Menu.buildFromTemplate(this.template);
 
     this.isPlaying = false;
@@ -193,12 +232,39 @@ class YPMTrayWindowsImpl {
       isPlaying => (this.isPlaying = isPlaying)
     );
     this.emitter.on('updateLikeState', isLiked => (this.isLiked = isLiked));
+    this.emitter.on('updateIcon', () => {
+      this.updateIcon();
+    });
+  }
+
+  updateIcon() {
+    let trayIconSetting = this.store.get('settings.trayIconTheme') || 'auto';
+    let iconTheme;
+    if (trayIconSetting === 'auto') {
+      iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+    } else {
+      iconTheme = trayIconSetting;
+    }
+
+    let icon = nativeImage
+      .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
+      .resize({
+        height: 20,
+        width: 20,
+      });
+
+    this.tray.setImage(icon);
   }
 }
 
-export function createTray(win, eventEmitter) {
-  // 感觉图标颜色应该不属于界面主题范畴，只需要跟随系统主题
-  let iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+export function createTray(win, eventEmitter, store) {
+  let trayIconSetting = store.get('settings.trayIconTheme') || 'auto';
+  let iconTheme;
+  if (trayIconSetting === 'auto') {
+    iconTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+  } else {
+    iconTheme = trayIconSetting;
+  }
 
   let icon = nativeImage
     .createFromPath(path.join(__static, `img/icons/menu-${iconTheme}@88.png`))
@@ -211,6 +277,6 @@ export function createTray(win, eventEmitter) {
   tray.setToolTip('YesPlayMusic');
 
   return isLinux
-    ? new YPMTrayLinuxImpl(tray, win, eventEmitter)
-    : new YPMTrayWindowsImpl(tray, win, eventEmitter);
+    ? new YPMTrayLinuxImpl(tray, win, eventEmitter, store)
+    : new YPMTrayWindowsImpl(tray, win, eventEmitter, store);
 }

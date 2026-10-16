@@ -130,6 +130,7 @@ export default {
     logout: '登出',
     language: '語言',
     lyric: '歌詞',
+    cache: '快取',
     others: '其他',
     customization: '自訂',
     MusicGenrePreference: {
@@ -162,6 +163,19 @@ export default {
     permissionRequired: '需要麥克風權限',
     appearance: {
       text: '外觀',
+      auto: '自動',
+      light: '淺色',
+      dark: '深色',
+    },
+    themeColor: {
+      text: '主題顏色',
+      default: '原始顏色',
+      sunset: '日落漸變',
+      ocean: '海洋漸變',
+      forest: '森林漸變',
+    },
+    trayIcon: {
+      text: '工作列圖示顏色',
       auto: '自動',
       light: '淺色',
       dark: '深色',
@@ -240,6 +254,8 @@ export default {
     minePlaylists: '我建立的歌單',
     likedPlaylists: '收藏的歌單',
     cardiacMode: '心動模式',
+    copyLyric: '複製歌詞',
+    copyLyricWithTranslation: '複製歌詞（含翻譯）',
   },
   toast: {
     savedToPlaylist: '已新增至歌單',

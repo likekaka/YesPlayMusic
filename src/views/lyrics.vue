@@ -248,7 +248,11 @@
               @dblclick="clickLyricLine(line.time, true)"
             >
               <div class="content">
-                <span v-if="line.contents[0]">{{ line.contents[0] }}</span>
+                <span
+                  v-if="line.contents[0]"
+                  @click.right="openLyricMenu($event, line, 0)"
+                  >{{ line.contents[0] }}</span
+                >
                 <br />
                 <span
                   v-if="
@@ -256,16 +260,39 @@
                     $store.state.settings.showLyricsTranslation
                   "
                   class="translation"
+                  @click.right="openLyricMenu($event, line, 1)"
                   >{{ line.contents[1] }}</span
                 >
               </div>
             </div>
+            <div id="line-end" class="line"></div>
+            <ContextMenu v-if="!noLyric" ref="lyricMenu">
+              <div class="item" @click="copyLyric(false)">{{
+                $t('contextMenu.copyLyric')
+              }}</div>
+              <div
+                v-if="
+                  rightClickLyric &&
+                  rightClickLyric.contents[1] &&
+                  $store.state.settings.showLyricsTranslation
+                "
+                class="item"
+                @click="copyLyric(true)"
+                >{{ $t('contextMenu.copyLyricWithTranslation') }}</div
+              >
+            </ContextMenu>
           </div>
         </transition>
       </div>
       <div class="close-button" @click="toggleLyrics">
         <button>
           <svg-icon icon-class="arrow-down" />
+        </button>
+      </div>
+      <div class="close-button" style="left: 24px" @click="fullscreen">
+        <button>
+          <svg-icon v-if="isFullscreen" icon-class="fullscreen-exit" />
+          <svg-icon v-else icon-class="fullscreen" />
         </button>
       </div>
     </div>
@@ -278,9 +305,10 @@
 
 import { mapState, mapMutations, mapActions } from 'vuex';
 import VueSlider from 'vue-slider-component';
+import ContextMenu from '@/components/ContextMenu.vue';
 import { formatTrackTime } from '@/utils/common';
-import { getLyric } from '@/api/track';
-import { lyricParser } from '@/utils/lyrics';
+import { getLyric, getCloudLyric } from '@/api/track';
+import { lyricParser, copyLyric, parseLyric } from '@/utils/lyrics';
 import ButtonIcon from '@/components/ButtonIcon.vue';
 import * as Vibrant from 'node-vibrant/dist/vibrant.worker.min.js';
 import Color from 'color';
@@ -288,11 +316,16 @@ import { isAccountLoggedIn } from '@/utils/auth';
 import { hasListSource, getListSourcePath } from '@/utils/playList';
 import locale from '@/locale';
 
+const electron =
+  process.env.IS_ELECTRON === true ? window.require('electron') : null;
+const ipcRenderer = electron?.ipcRenderer || null;
+
 export default {
   name: 'Lyrics',
   components: {
     VueSlider,
     ButtonIcon,
+    ContextMenu,
   },
   data() {
     return {
@@ -305,6 +338,8 @@ export default {
       minimize: true,
       background: '',
       date: this.formatTime(new Date()),
+      isFullscreen: !!document.fullscreenElement,
+      rightClickLyric: null,
     };
   },
   computed: {
@@ -426,8 +461,16 @@ export default {
         this.setLyricsInterval();
         this.$store.commit('enableScrolling', false);
       } else {
-        clearInterval(this.lyricsInterval);
+        // 在 Electron 环境下，即使不显示歌词页面，也保持定时器运行以更新 Touch Bar
+        if (process.env.IS_ELECTRON !== true) {
+          clearInterval(this.lyricsInterval);
+        }
         this.$store.commit('enableScrolling', true);
+        // Fullscreen is requested on documentElement, so it makes the whole
+        // window fullscreen. Since the only way to leave fullscreen from the
+        // UI lives on this page, closing it would leave the window stuck in
+        // fullscreen with no way out (minimize/restore stays fullscreen).
+        this.exitFullscreen();
       }
     },
   },
@@ -435,11 +478,25 @@ export default {
     this.getLyric();
     this.getCoverColor();
     this.initDate();
+    // 在 Electron 环境下立即启动歌词定时器，以便 Touch Bar 可以显示歌词
+    if (process.env.IS_ELECTRON === true) {
+      this.setLyricsInterval();
+    }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        this.fullscreen();
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      this.isFullscreen = !!document.fullscreenElement;
+    });
   },
   beforeDestroy: function () {
     if (this.timer) {
       clearInterval(this.timer);
     }
+    this.exitFullscreen();
   },
   destroyed() {
     clearInterval(this.lyricsInterval);
@@ -465,6 +522,18 @@ export default {
         ':' +
         second.padStart(2, '0')
       );
+    },
+    fullscreen() {
+      if (document.fullscreenElement) {
+        this.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen();
+      }
+    },
+    exitFullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
     },
     addToPlaylist() {
       if (!isAccountLoggedIn()) {
@@ -498,6 +567,23 @@ export default {
     },
     getLyric() {
       if (!this.currentTrack.id) return;
+      if (
+        this.currentTrack.pc !== null &&
+        this.currentTrack.cd === null &&
+        this.$store.state.data.user?.userId
+      ) {
+        //云盘未设置关联的歌曲获取其内置歌词
+        return getCloudLyric(
+          this.currentTrack.id,
+          this.$store.state.data.user?.userId
+        ).then(data => {
+          this.tlyric = [];
+          this.romalyric = [];
+          this.lyric = data?.lrc?.length > 0 ? parseLyric(data.lrc) : [];
+          this.lyricType = 'translation';
+          return true;
+        });
+      }
       return getLyric(this.currentTrack.id).then(data => {
         if (!data?.lrc?.lyric) {
           this.lyric = [];
@@ -564,6 +650,21 @@ export default {
         this.player.play();
       }
     },
+    openLyricMenu(e, lyric, idx) {
+      this.rightClickLyric = { ...lyric, idx };
+      this.$refs.lyricMenu.openMenu(e);
+      e.preventDefault();
+    },
+    copyLyric(withTranslation) {
+      if (this.rightClickLyric) {
+        const idx = this.rightClickLyric.idx;
+        if (!withTranslation) {
+          copyLyric(this.rightClickLyric.contents[idx]);
+        } else {
+          copyLyric(this.rightClickLyric.contents.join(' '));
+        }
+      }
+    },
     setLyricsInterval() {
       this.lyricsInterval = setInterval(() => {
         const progress = this.player.seek(null, false) ?? 0;
@@ -575,12 +676,27 @@ export default {
           );
         });
         if (oldHighlightLyricIndex !== this.highlightLyricIndex) {
-          const el = document.getElementById(`line${this.highlightLyricIndex}`);
-          if (el)
-            el.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-            });
+          // 只在显示歌词页面时才滚动
+          if (this.showLyrics) {
+            const el = document.getElementById(
+              `line${this.highlightLyricIndex}`
+            );
+            if (el)
+              el.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+              });
+          }
+
+          // 发送当前歌词到主进程（用于 Touch Bar 显示）
+          if (ipcRenderer && this.highlightLyricIndex >= 0) {
+            const currentLyricLine = this.lyricToShow[this.highlightLyricIndex];
+            if (currentLyricLine && currentLyricLine.contents) {
+              // 只发送第一行歌词（原文），避免显示过长
+              const lyricText = currentLyricLine.contents[0] || '';
+              ipcRenderer.send('updateLyric', { lyric: lyricText });
+            }
+          }
         }
       }, 50);
     },
@@ -647,6 +763,7 @@ export default {
   position: absolute;
   height: 100vh;
   width: 100vw;
+
   .top-right,
   .bottom-left {
     z-index: 0;
@@ -679,6 +796,7 @@ export default {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -753,6 +871,7 @@ export default {
           margin: 0 10px;
           display: flex;
           align-items: center;
+
           .volume-bar {
             width: 84px;
           }
@@ -834,6 +953,7 @@ export default {
           width: 22px;
         }
       }
+
       .lyric-switch-icon {
         color: var(--color-text);
         font-size: 14px;
@@ -903,6 +1023,7 @@ export default {
         transform-origin: center left;
         transform: scale(0.95);
         transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        user-select: none;
 
         span {
           opacity: 0.28;
@@ -918,8 +1039,18 @@ export default {
       }
     }
 
-    .line#line-1:hover {
+    .line#line-1:hover,
+    .line#line-end:hover {
       background: unset;
+    }
+
+    // 底部留白，让最后几句歌词也能滚动到屏幕中间。
+    // 不能用 .line:last-child，因为最后一个子元素是右键菜单 (ContextMenu)
+    .line#line-end {
+      flex-shrink: 0;
+      height: 50vh;
+      margin: 0;
+      padding: 0;
     }
 
     .translation {
@@ -928,6 +1059,7 @@ export default {
 
     .highlight div.content {
       transform: scale(1);
+
       span {
         opacity: 0.98;
         display: inline-block;
@@ -945,10 +1077,6 @@ export default {
 
   .lyrics-container .line:first-child {
     margin-top: 50vh;
-  }
-
-  .lyrics-container .line:last-child {
-    margin-bottom: calc(50vh - 128px);
   }
 }
 
@@ -992,6 +1120,7 @@ export default {
   .left-side {
     display: none;
   }
+
   .right-side .lyrics-container {
     max-width: 100%;
   }
@@ -1008,7 +1137,10 @@ export default {
   transition: all 0.4s;
 }
 
-.slide-up-enter, .slide-up-leave-to /* .fade-leave-active below version 2.1.8 */ {
+.slide-up-enter,
+.slide-up-leave-to
+
+/* .fade-leave-active below version 2.1.8 */ {
   transform: translateY(100%);
 }
 

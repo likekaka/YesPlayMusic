@@ -133,6 +133,7 @@ export default {
     logout: 'LOGOUT',
     language: 'Languages',
     lyric: 'Lyric',
+    cache: 'Cache',
     others: 'Others',
     customization: 'Customization',
     MusicGenrePreference: {
@@ -165,6 +166,19 @@ export default {
     permissionRequired: 'Microphone Permission Required',
     appearance: {
       text: 'Appearance',
+      auto: 'Auto',
+      light: 'Light',
+      dark: 'Dark',
+    },
+    themeColor: {
+      text: 'Theme Color',
+      default: 'Original',
+      sunset: 'Sunset Gradient',
+      ocean: 'Ocean Gradient',
+      forest: 'Forest Gradient',
+    },
+    trayIcon: {
+      text: 'Tray Icon Color',
       auto: 'Auto',
       light: 'Light',
       dark: 'Dark',
@@ -244,6 +258,8 @@ export default {
     minePlaylists: 'My Playlists',
     likedPlaylists: 'Liked Playlists',
     cardiacMode: 'Cardiac Mode',
+    copyLyric: 'Copy Lyric',
+    copyLyricWithTranslation: 'Copy Lyric With Translation',
   },
   toast: {
     savedToPlaylist: 'Saved to playlist',

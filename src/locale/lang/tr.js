@@ -128,6 +128,7 @@ export default {
     logout: 'ÇIKIŞ YAP',
     language: 'Diller',
     lyric: 'Şarkı Sözleri',
+    cache: 'Önbellek',
     others: 'Diğerleri',
     customization: 'Özelleştirme',
     MusicGenrePreference: {
@@ -160,6 +161,19 @@ export default {
     permissionRequired: 'Mikrofon izni gerekiyor',
     appearance: {
       text: 'Görünüş',
+      auto: 'Otomatik',
+      light: 'Aydınlık',
+      dark: 'Karanlık',
+    },
+    themeColor: {
+      text: 'Tema rengi',
+      default: 'Orijinal',
+      sunset: 'Gün batımı geçişi',
+      ocean: 'Okyanus geçişi',
+      forest: 'Orman geçişi',
+    },
+    trayIcon: {
+      text: 'Tepsi Simgesi Rengi',
       auto: 'Otomatik',
       light: 'Aydınlık',
       dark: 'Karanlık',
@@ -230,6 +244,8 @@ export default {
     minePlaylists: 'My Playlists',
     likedPlaylists: 'Liked Playlists',
     cardiacMode: 'Cardiac Mode',
+    copyLyric: 'Copy Lyric',
+    copyLyricWithTranslation: 'Copy Lyric With Translation',
   },
   toast: {
     savedToMyLikedSongs: 'Beğendiğim Müziklere Kaydet',

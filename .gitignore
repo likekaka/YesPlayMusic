@@ -32,3 +32,8 @@ NeteaseCloudMusicApi-master.zip
 # Local Netlify folder
 .netlify
 vercel.json
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
