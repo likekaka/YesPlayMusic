@@ -66,10 +66,11 @@ module.exports = {
     });
 
     // webpack 5 不再自动注入 node polyfill，
-    // 静态替换 process.env.IS_ELECTRON，避免浏览器端 process is not defined
+    // 静态替换 process.env.IS_ELECTRON / process.platform，避免浏览器端 process is not defined
     config.plugin('define-electron-flag').use(webpack.DefinePlugin, [
       {
         'process.env.IS_ELECTRON': false,
+        'process.platform': "''",
       },
     ]);
 
