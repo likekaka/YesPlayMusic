@@ -4,7 +4,7 @@ import { trackScrobble, trackUpdateNowPlaying } from '@/api/lastfm';
 import { fmTrash, personalFM } from '@/api/others';
 import { getPlaylistDetail, intelligencePlaylist } from '@/api/playlist';
 import { getLyric, getMP3, getTrackDetail, scrobble } from '@/api/track';
-import { getUnmUrl } from '@/api/unm';
+import { getUnmUrl, resolveKuwoUrl } from '@/api/unm';
 import store from '@/store';
 import { isAccountLoggedIn } from '@/utils/auth';
 import { cacheTrackSource, getTrackSource } from '@/utils/db';
@@ -441,7 +441,12 @@ export default class {
       if (result && result.br > 0 && result.url) {
         return result.url;
       }
-      // 解析不到时回退 outer/url：普通歌可用，灰色歌会 404 由 howler 跳歌
+      // GD Studio 无源 → 酷我按歌名+歌手搜索换源
+      const kuwoUrl = await resolveKuwoUrl(track).catch(() => null);
+      if (kuwoUrl) {
+        return kuwoUrl;
+      }
+      // 仍解析不到时回退 outer/url：普通歌可用，灰色歌会 404 由 howler 跳歌
       return `https://music.163.com/song/media/outer/url?id=${track.id}`;
     }
 
