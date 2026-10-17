@@ -25,6 +25,20 @@ module.exports = {
           '^/unm': '/',
         },
       },
+      '^/kuwo-search': {
+        target: 'http://search.kuwo.cn',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/kuwo-search': '/',
+        },
+      },
+      '^/kuwo-url': {
+        target: 'http://antiserver.kuwo.cn',
+        changeOrigin: true,
+        pathRewrite: {
+          '^/kuwo-url': '/',
+        },
+      },
     },
   },
   pwa: {
