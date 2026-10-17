@@ -7,6 +7,14 @@
     {
       "source": "/unm/:match*",
       "destination": "https://music-api.gdstudio.xyz/:match*"
+    },
+    {
+      "source": "/kuwo-search/:match*",
+      "destination": "http://search.kuwo.cn/:match*"
+    },
+    {
+      "source": "/kuwo-url/:match*",
+      "destination": "http://antiserver.kuwo.cn/:match*"
     }
   ]
 }
