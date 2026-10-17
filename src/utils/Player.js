@@ -112,7 +112,7 @@ export default class {
   }
   set repeatMode(mode) {
     if (this._isPersonalFM) return;
-    if (!['on', 'off', 'one'].includes(mode)) {
+    if (!['off', 'on', 'one'].includes(mode)) {
       console.warn("repeatMode: invalid args, must be 'on' | 'off' | 'one'");
       return;
     }
@@ -419,9 +419,9 @@ export default class {
         return source;
       });
     } else {
-      return new Promise(resolve => {
-        resolve(`https://music.163.com/song/media/outer/url?id=${track.id}`);
-      });
+      // 未登录不直接用 outer/url 兜底：灰色歌曲会 302 到 404，
+      // 返回 null 让 UNM/GD Studio 先解析，解析不到再回退
+      return null;
     }
   }
   async _getAudioSourceFromUnblockMusic(track) {
@@ -441,7 +441,8 @@ export default class {
       if (result && result.br > 0 && result.url) {
         return result.url;
       }
-      return null;
+      // 解析不到时回退 outer/url：普通歌可用，灰色歌会 404 由 howler 跳歌
+      return `https://music.163.com/song/media/outer/url?id=${track.id}`;
     }
 
     /**
@@ -847,7 +848,7 @@ export default class {
       this._howler?.fade(0, this.volume, PLAY_PAUSE_FADE_DURATION);
 
       // 播放时确保开启player.
-      // 避免因"忘记设置"导致在播放时播放器不显示的Bug
+      // 避免因"忘记设置"导致在播放器不显示的Bug
       this._enabled = true;
       this._setPlaying(true);
       if (this._currentTrack.name) {
