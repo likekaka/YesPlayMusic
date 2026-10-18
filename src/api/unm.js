@@ -7,6 +7,53 @@ export function getUnmUrl(id, br = '320') {
   );
 }
 
+// ---- 换源结果缓存 ----
+// GD Studio 限频 5min/50 次，且播放器会预取下一首；
+// 成功结果缓存 30min（直链带时效签名不能久存），失败负缓存 10min 防反复撞墙
+const CACHE_PREFIX = 'unm_cache:';
+const TTL_OK = 30 * 60 * 1000;
+const TTL_FAIL = 10 * 60 * 1000;
+
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const { url, exp } = JSON.parse(raw);
+    if (Date.now() > exp) return null;
+    return url; // '' 表示负缓存
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key, url, ok) {
+  try {
+    localStorage.setItem(
+      CACHE_PREFIX + key,
+      JSON.stringify({
+        url: url ?? '',
+        exp: Date.now() + (ok ? TTL_OK : TTL_FAIL),
+      })
+    );
+  } catch {
+    /* localStorage 满了就算了 */
+  }
+}
+
+export function clearUnmCache(trackId) {
+  // trackId 可能出现在多个 br 的 key 里，前缀没法精确删，遍历一次
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(CACHE_PREFIX + trackId + ':')) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch {
+    /* noop */
+  }
+}
+
 // ---- 酷我换源（GD Studio 无源时的 fallback）----
 
 // search.kuwo.cn 返回单引号伪 JSON，正则提取需要的字段
@@ -65,5 +112,28 @@ export async function resolveKuwoUrl(track) {
   if (!match) return null;
   const result = await getKuwoUrl(match.rid);
   if (result?.code === 200 && result?.url) return result.url;
+  return null;
+}
+
+// 网页端换源总入口：缓存 → GD Studio → 酷我
+// 返回直链；全部失败返回 null（调用方回退 outer/url）
+export async function resolveWebSource(track, br = '320') {
+  const key = `${track.id}:${br}`;
+  const cached = readCache(key);
+  if (cached !== null) return cached || null;
+
+  const gd = await getUnmUrl(track.id, br).catch(() => null);
+  if (gd && gd.br > 0 && gd.url) {
+    writeCache(key, gd.url, true);
+    return gd.url;
+  }
+
+  const kuwoUrl = await resolveKuwoUrl(track).catch(() => null);
+  if (kuwoUrl) {
+    writeCache(key, kuwoUrl, true);
+    return kuwoUrl;
+  }
+
+  writeCache(key, '', false);
   return null;
 }
