@@ -4,7 +4,7 @@ import { trackScrobble, trackUpdateNowPlaying } from '@/api/lastfm';
 import { fmTrash, personalFM } from '@/api/others';
 import { getPlaylistDetail, intelligencePlaylist } from '@/api/playlist';
 import { getLyric, getMP3, getTrackDetail, scrobble } from '@/api/track';
-import { getUnmUrl, resolveKuwoUrl } from '@/api/unm';
+import { clearUnmCache, resolveWebSource } from '@/api/unm';
 import store from '@/store';
 import { isAccountLoggedIn } from '@/utils/auth';
 import { cacheTrackSource, getTrackSource } from '@/utils/db';
@@ -362,6 +362,8 @@ export default class {
         this._playNextTrack(this._isPersonalFM);
       } else {
         const t = this.progress;
+        // 换源直链可能已过期（带时效签名），清缓存强制重解析
+        clearUnmCache(this.currentTrackID);
         this._replaceCurrentTrackAudio(this.currentTrack, false, false).then(
           replaced => {
             // 如果 replaced 为 false，代表当前的 track 已经不是这里想要替换的track
@@ -431,22 +433,17 @@ export default class {
       return null;
     }
 
-    // 网页端：GD Studio 多音源解析（https://music.gdstudio.xyz）
-    // 拿网易歌曲 id 换取其他平台可用播放链接，br>0 表示换源成功
+    // 网页端：GD Studio 解析 + 酷我换源，结果带缓存（见 api/unm.js）
+    // resolveWebSource 返回 null 表示全源无果，回退 outer/url
     if (process.env.IS_ELECTRON !== true) {
-      const result = await getUnmUrl(
-        track.id,
+      const source = await resolveWebSource(
+        track,
         store.state.settings.unmEnableFlac ? '999' : '320'
       ).catch(() => null);
-      if (result && result.br > 0 && result.url) {
-        return result.url;
+      if (source) {
+        return source;
       }
-      // GD Studio 无源 → 酷我按歌名+歌手搜索换源
-      const kuwoUrl = await resolveKuwoUrl(track).catch(() => null);
-      if (kuwoUrl) {
-        return kuwoUrl;
-      }
-      // 仍解析不到时回退 outer/url：普通歌可用，灰色歌会 404 由 howler 跳歌
+      // 普通歌可用，灰色歌会 404 由 howler 跳歌
       return `https://music.163.com/song/media/outer/url?id=${track.id}`;
     }
 
